@@ -1,0 +1,44 @@
+# OSDO Configuration Directory .gitignore
+#
+# This file ensures sensitive or environment-specific files
+# in the .osdo directory are not committed to version control
+
+# Project-specific overrides (keep these local)
+config.local.yml
+*.local.yml
+
+# Generated reports and artifacts
+reports/
+*.sarif
+*.html
+*.json
+*.xml
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Tool-specific caches
+.semgrep_cache/
+.phpstan_cache/
+dependency-check-cache/
+
+# Sensitive data that shouldn't be committed
+secrets.yml
+credentials.yml
+*.key
+*.pem
+*.p12
+*.pfx
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

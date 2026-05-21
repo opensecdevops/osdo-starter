@@ -1,0 +1,226 @@
+# Gitleaks Configuration for OSDO Framework
+#
+# Detects hardcoded secrets, API keys, tokens, and other sensitive data
+# Aligned with OWASP secrets management best practices
+
+title = "OSDO Gitleaks Configuration"
+
+# Extend default Gitleaks rules
+[extend]
+useDefault = true
+
+# Allowlist configuration
+[allowlist]
+description = "Global allowlist for false positives"
+regexTarget = "match"
+
+# Common false positives to ignore
+regexes = [
+  # Example UUIDs and test values
+  '''[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+  # Placeholder values
+  '''(example|sample|test|demo|placeholder)[-_](key|token|secret|password)''',
+  # Documentation examples
+  '''your[-_](api[-_]key|token|secret)[-_]here''',
+]
+
+# Files to ignore
+paths = [
+  # Dependencies and build artifacts
+  '''(.*?)(yarn\.lock|package-lock\.json|Gemfile\.lock|composer\.lock|go\.sum)$''',
+  # Documentation
+  '''(.*?)(\.md|\.txt|LICENSE|CHANGELOG)$''',
+  # Test fixtures
+  '''(.*/)?tests?/fixtures/.*''',
+  '''(.*/)?__tests__/.*''',
+  # Example configurations
+  '''(.*/)?examples?/.*\.example$''',
+  '''(.*/)?\.example\..*''',
+  # Gitleaks own config
+  '''\.osdo/gitleaks\.toml$''',
+]
+
+# Custom rules for additional secret patterns
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey)['\"]?\s*[:=]\s*['\"]?([a-z0-9_\-]{20,})['\"]?'''
+keywords = [
+  "api_key",
+  "apikey",
+  "api-key",
+]
+
+[[rules]]
+id = "jwt-token"
+description = "JSON Web Token"
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+keywords = [
+  "eyJ",
+]
+
+[[rules]]
+id = "slack-webhook"
+description = "Slack Webhook URL"
+regex = '''https://hooks\.slack\.com/services/T[a-zA-Z0-9_]{8,}/B[a-zA-Z0-9_]{8,}/[a-zA-Z0-9_]{24,}'''
+keywords = [
+  "hooks.slack.com",
+]
+
+[[rules]]
+id = "github-token"
+description = "GitHub Personal Access Token"
+regex = '''ghp_[0-9a-zA-Z]{36}'''
+keywords = [
+  "ghp_",
+]
+
+[[rules]]
+id = "github-oauth"
+description = "GitHub OAuth Token"
+regex = '''gho_[0-9a-zA-Z]{36}'''
+keywords = [
+  "gho_",
+]
+
+[[rules]]
+id = "github-app-token"
+description = "GitHub App Token"
+regex = '''(ghu|ghs)_[0-9a-zA-Z]{36}'''
+keywords = [
+  "ghu_",
+  "ghs_",
+]
+
+[[rules]]
+id = "github-refresh-token"
+description = "GitHub Refresh Token"
+regex = '''ghr_[0-9a-zA-Z]{36}'''
+keywords = [
+  "ghr_",
+]
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key ID"
+regex = '''(?i)aws[_-]?access[_-]?key[_-]?id['\"]?\s*[:=]\s*['\"]?(AKIA[0-9A-Z]{16})['\"]?'''
+keywords = [
+  "AKIA",
+]
+
+[[rules]]
+id = "aws-secret-key"
+description = "AWS Secret Access Key"
+regex = '''(?i)aws[_-]?secret[_-]?access[_-]?key['\"]?\s*[:=]\s*['\"]?([A-Za-z0-9/+=]{40})['\"]?'''
+keywords = [
+  "aws_secret_access_key",
+  "aws_secret_key",
+]
+
+[[rules]]
+id = "azure-client-secret"
+description = "Azure Client Secret"
+regex = '''(?i)(azure|az)[_-]?(client|app)[_-]?secret['\"]?\s*[:=]\s*['\"]?([a-z0-9_\-\.~]{34,})['\"]?'''
+keywords = [
+  "azure_client_secret",
+  "az_client_secret",
+]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API Key"
+regex = '''AIza[0-9A-Za-z_-]{35}'''
+keywords = [
+  "AIza",
+]
+
+[[rules]]
+id = "google-oauth"
+description = "Google OAuth Token"
+regex = '''ya29\.[0-9A-Za-z_-]+'''
+keywords = [
+  "ya29.",
+]
+
+[[rules]]
+id = "heroku-api-key"
+description = "Heroku API Key"
+regex = '''[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'''
+keywords = [
+  "heroku",
+]
+
+[[rules]]
+id = "mailgun-api-key"
+description = "Mailgun API Key"
+regex = '''key-[0-9a-zA-Z]{32}'''
+keywords = [
+  "mailgun",
+]
+
+[[rules]]
+id = "stripe-api-key"
+description = "Stripe API Key"
+regex = '''(?i)(sk|pk)_(test|live)_[0-9a-zA-Z]{24,}'''
+keywords = [
+  "sk_test",
+  "pk_test",
+  "sk_live",
+  "pk_live",
+]
+
+[[rules]]
+id = "twilio-api-key"
+description = "Twilio API Key"
+regex = '''SK[0-9a-fA-F]{32}'''
+keywords = [
+  "twilio",
+]
+
+[[rules]]
+id = "generic-password"
+description = "Generic Password"
+regex = '''(?i)(password|passwd|pwd)['\"]?\s*[:=]\s*['\"]([^'\"]{8,})['\"]'''
+keywords = [
+  "password",
+  "passwd",
+  "pwd",
+]
+
+[[rules]]
+id = "database-connection-string"
+description = "Database Connection String"
+regex = '''(?i)(jdbc|mongodb|mysql|postgresql|sqlserver)://[^:]+:[^@]+@[^/]+'''
+keywords = [
+  "jdbc://",
+  "mongodb://",
+  "mysql://",
+  "postgresql://",
+]
+
+[[rules]]
+id = "private-key"
+description = "Private Key"
+regex = '''-----BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY( BLOCK)?-----'''
+keywords = [
+  "BEGIN PRIVATE KEY",
+  "BEGIN RSA PRIVATE KEY",
+  "BEGIN OPENSSH PRIVATE KEY",
+]
+
+[[rules]]
+id = "docker-config"
+description = "Docker Config with Auth"
+regex = '''(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{20,}"'''
+keywords = [
+  "docker",
+  "auth",
+]
+
+# Entropy detection for high-entropy strings
+[[rules]]
+id = "high-entropy-string"
+description = "High Entropy String (Potential Secret)"
+regex = '''['\"]([A-Za-z0-9+/=]{32,})['\"]'''
+entropy = 4.5
+keywords = []

@@ -1,0 +1,93 @@
+name: OSDO Starter CI
+
+on:
+    push:
+        branches: [main, develop]
+    pull_request:
+        branches: [main]
+
+permissions:
+    contents: read
+
+jobs:
+    validate-config:
+        name: Validar Configuración OSDO
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Instalar @osdo/cli
+              run: npm install -g @osdo/cli
+
+            - name: Validar .osdo/config.yml
+              run: |
+                  echo "Validando configuración OSDO..."
+                  if [ -f ".osdo/config.yml" ]; then
+                    python3 -c "import yaml; yaml.safe_load(open('.osdo/config.yml'))" && \
+                      echo "✅ .osdo/config.yml es YAML válido"
+                  else
+                    echo "⚠️  No se encontró .osdo/config.yml (usa la plantilla)"
+                  fi
+
+            - name: Generar pipeline de ejemplo
+              run: |
+                  echo "Probando generación de pipelines..."
+                  for template in security full release; do
+                    echo "  Generando template $template..."
+                    osdo pipeline generate --template "$template" --platform github \
+                      --output "/tmp/osdo-$template.yml" 2>/dev/null || \
+                      echo "  ⚠️  template $template no disponible aún"
+                  done
+
+            - name: Validar YAML de pipelines generados
+              run: |
+                  for file in /tmp/osdo-*.yml; do
+                    [ -f "$file" ] || continue
+                    echo "Validando $file..."
+                    python3 -c "import yaml; yaml.safe_load(open('$file'))"
+                    echo "✅ YAML válido: $file"
+                  done
+
+    validate-workflows:
+        name: Validar Workflows del Template
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Instalar yamllint
+              run: pip install yamllint --quiet
+
+            - name: Lint workflows de GitHub Actions
+              run: |
+                  yamllint -d "{extends: relaxed, rules: {line-length: {max: 200}}}" \
+                    .github/workflows/ && echo "✅ Todos los workflows son YAML válido"
+
+            - name: Verificar referencias a osdo-workflows
+              run: |
+                  if grep -r "opensecdevops/osdo-workflows" .github/workflows/; then
+                    echo "✅ Referencia a osdo-workflows encontrada"
+                  else
+                    echo "::warning::No se encontraron referencias a opensecdevops/osdo-workflows"
+                  fi
+
+    security-scan:
+        name: Análisis de Seguridad
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Escaneo con Trivy
+              uses: aquasecurity/trivy-action@master
+              with:
+                  scan-type: "fs"
+                  scan-ref: "."
+                  severity: "CRITICAL,HIGH"
+                  exit-code: "1"

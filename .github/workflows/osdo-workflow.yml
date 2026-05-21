@@ -1,0 +1,192 @@
+name: OSDO CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Toggles
+      run_tests:
+        description: "Run tests and quality checks"
+        required: true
+        default: true
+        type: boolean
+      run_security_scan:
+        description: "Run security scans"
+        required: true
+        default: true
+        type: boolean
+      run_static_analysis:
+        description: "Run static analysis (SAST)"
+        required: true
+        default: true
+        type: boolean
+      run_secrets_scan:
+        description: "Run secrets detection"
+        required: true
+        default: true
+        type: boolean
+      run_build_security:
+        description: "Run secure build and SBOM generation"
+        required: true
+        default: true
+        type: boolean
+
+      # Versions (optional)
+      node_version:
+        description: "Node.js version to use"
+        required: false
+        default: "22"
+        type: string
+      python_version:
+        description: "Python version to use"
+        required: false
+        default: "3.11"
+        type: string
+      java_version:
+        description: "Java version to use"
+        required: false
+        default: "17"
+        type: string
+      go_version:
+        description: "Go version to use"
+        required: false
+        default: "1.21"
+        type: string
+      php_version:
+        description: "PHP version to use"
+        required: false
+        default: "8.2"
+        type: string
+
+      # Thresholds / config
+      test_coverage_threshold:
+        description: "Minimum test coverage percentage"
+        required: false
+        default: "80"
+        type: string
+      critical_threshold:
+        description: "Maximum allowed critical vulnerabilities"
+        required: false
+        default: "0"
+        type: string
+      high_threshold:
+        description: "Maximum allowed high vulnerabilities"
+        required: false
+        default: "10"
+        type: string
+      secrets_threshold:
+        description: "Maximum allowed secrets"
+        required: false
+        default: "0"
+        type: string
+      sbom_format:
+        description: "SBOM format (json, xml, both)"
+        required: false
+        default: "both"
+        type: string
+      build_command:
+        description: "Build command to execute"
+        required: false
+        default: "npm run build"
+        type: string
+      report_format:
+        description: "Compliance report format (markdown, html, json)"
+        required: false
+        default: "markdown"
+        type: string
+      fail_on_high_security:
+        description: "Fail pipeline on high severity vulnerabilities"
+        required: false
+        default: true
+        type: boolean
+
+  push:
+    branches: [main, develop, feature/*]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * 1"
+
+concurrency:
+  group: "osdo-compliance-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  osdo-pipeline:
+    name: OSDO Security & Compliance Pipeline
+    # Reusable workflow CENTRAL (afuera del template repo)
+    uses: opensecdevops/osdo-workflows/.github/workflows/osdo-framework.yml@v2
+    secrets: inherit
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      pull-requests: write
+    with:
+      # Environment Configuration
+      node-version: ${{ inputs.node_version || '22' }}
+      python-version: ${{ inputs.python_version || '3.11' }}
+      java-version: ${{ inputs.java_version || '17' }}
+      go-version: ${{ inputs.go_version || '1.21' }}
+      php-version: ${{ inputs.php_version || '8.2' }}
+
+      # Pipeline Control
+      run-tests: ${{ inputs.run_tests != false }}
+      run-security-scan: ${{ inputs.run_security_scan != false }}
+      run-compliance-report: true
+
+      # Quality Configuration
+      test-coverage-threshold: ${{ inputs.test_coverage_threshold || '80' }}
+      fail-on-high-security: ${{ inputs.fail_on_high_security != false }}
+
+      # Test Configuration
+      enable-unit-tests: ${{ inputs.run_tests != false }}
+      enable-integration-tests: ${{ inputs.run_tests != false }}
+      enable-e2e-tests: false
+
+      # Security Configuration
+      enable-sca: ${{ inputs.run_security_scan != false }}
+      enable-sast: ${{ inputs.run_static_analysis != false }}
+      enable-secrets: ${{ inputs.run_secrets_scan != false }}
+      enable-container-scan: ${{ inputs.run_build_security != false }}
+
+      # Build Security Configuration
+      enable-build-security: ${{ inputs.run_build_security != false }}
+      sbom-format: ${{ inputs.sbom_format || 'both' }}
+      build-command: ${{ inputs.build_command || 'npm run build' }}
+
+      # Quality Gate Configuration
+      enable-quality-gate: true
+      critical-threshold: ${{ inputs.critical_threshold || '0' }}
+      high-threshold: ${{ inputs.high_threshold || '10' }}
+      secrets-threshold: ${{ inputs.secrets_threshold || '0' }}
+
+      # Report Configuration
+      report-format: ${{ inputs.report_format || 'markdown' }}
+
+  osdo-summary:
+    name: OSDO Summary
+    runs-on: ubuntu-latest
+    needs: osdo-pipeline
+    if: always()
+    steps:
+      - name: Display OSDO Results Summary
+        run: |
+          echo "OSDO Pipeline Completed"
+          echo "================================"
+          echo "Compliance Status: ${{ needs.osdo-pipeline.outputs.compliance-status }}"
+          echo "Test Coverage: ${{ needs.osdo-pipeline.outputs.test-coverage }}%"
+          echo "Vulnerabilities Found: ${{ needs.osdo-pipeline.outputs.vulnerabilities-found }}"
+          echo "Quality Gate Status: ${{ needs.osdo-pipeline.outputs.quality-gate-status }}"
+          echo "Build Verification: ${{ needs.osdo-pipeline.outputs.build-verification }}"
+          echo "================================"
+
+  deployment-gate:
+    name: Deployment Gate
+    runs-on: ubuntu-latest
+    needs: osdo-pipeline
+    if: github.ref == 'refs/heads/main' && needs.osdo-pipeline.outputs.compliance-status == 'COMPLIANT'
+    steps:
+      - name: Approve deployment
+        run: |
+          echo "OSDO Quality Gate PASSED - Ready for deployment"
+          echo "OSDO_DEPLOYMENT_APPROVED=true" >> $GITHUB_ENV

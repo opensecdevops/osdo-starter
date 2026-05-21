@@ -1,0 +1,226 @@
+# Semgrep Configuration for OSDO Framework
+#
+# Multi-language SAST rules focused on OWASP Top 10 and CWE Top 25
+# Optimized for security-first development
+
+rules:
+  # OWASP A01:2021 - Broken Access Control
+  - id: hardcoded-credentials
+    patterns:
+      - pattern-either:
+          - pattern: password = "..."
+          - pattern: api_key = "..."
+          - pattern: secret = "..."
+          - pattern: token = "..."
+          - pattern: apiKey = "..."
+          - pattern: accessKey = "..."
+    message: "Hardcoded credentials detected. Use environment variables or secure secret management."
+    severity: ERROR
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      owasp: "A02:2021 - Cryptographic Failures"
+      confidence: HIGH
+
+  # OWASP A02:2021 - Cryptographic Failures
+  - id: weak-hash-md5
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.md5(...)
+          - pattern: crypto.createHash('md5')
+          - pattern: MessageDigest.getInstance("MD5")
+          - pattern: md5.Sum(...)
+          - pattern: md5(...)
+    message: "MD5 is cryptographically broken. Use SHA-256 or better."
+    severity: ERROR
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      owasp: "A02:2021 - Cryptographic Failures"
+
+  - id: weak-hash-sha1
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.sha1(...)
+          - pattern: crypto.createHash('sha1')
+          - pattern: MessageDigest.getInstance("SHA-1")
+          - pattern: sha1.Sum(...)
+          - pattern: sha1(...)
+    message: "SHA-1 is deprecated. Use SHA-256 or SHA-3."
+    severity: WARNING
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      owasp: "A02:2021 - Cryptographic Failures"
+
+  # OWASP A03:2021 - Injection
+  - id: sql-injection-risk
+    patterns:
+      - pattern-either:
+          - pattern: execute("... " + $VAR + " ...")
+          - pattern: query("... " + $VAR + " ...")
+          - pattern: cursor.execute(f"... {$VAR} ...")
+          - pattern: db.query(`... ${$VAR} ...`)
+    message: "Potential SQL injection. Use parameterized queries."
+    severity: ERROR
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 - Injection"
+      confidence: HIGH
+
+  - id: command-injection-risk
+    patterns:
+      - pattern-either:
+          - pattern: os.system($VAR)
+          - pattern: subprocess.call($VAR, ...)
+          - pattern: exec($VAR)
+          - pattern: eval($VAR)
+          - pattern: child_process.exec($VAR)
+          - pattern: Runtime.getRuntime().exec($VAR)
+    message: "Potential command injection. Avoid dynamic command execution."
+    severity: ERROR
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "A03:2021 - Injection"
+
+  # OWASP A04:2021 - Insecure Design
+  - id: missing-authentication
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @app.route(...)
+              def $FUNC(...):
+                ...
+          - pattern: |
+              app.get(..., (...) => {
+                ...
+              })
+    pattern-not: |
+      @login_required
+      def $FUNC(...):
+        ...
+    message: "Endpoint may be missing authentication. Verify access control."
+    severity: WARNING
+    languages: [python, javascript, typescript]
+    metadata:
+      owasp: "A04:2021 - Insecure Design"
+
+  # OWASP A05:2021 - Security Misconfiguration
+  - id: debug-mode-enabled
+    patterns:
+      - pattern-either:
+          - pattern: DEBUG = True
+          - pattern: app.debug = true
+          - pattern: debug=True
+    message: "Debug mode should be disabled in production."
+    severity: ERROR
+    languages: [python, javascript, typescript]
+    metadata:
+      owasp: "A05:2021 - Security Misconfiguration"
+
+  - id: insecure-ssl-verification
+    patterns:
+      - pattern-either:
+          - pattern: verify=False
+          - pattern: rejectUnauthorized = false
+          - pattern: InsecureSkipVerify = true
+    message: "SSL/TLS verification is disabled. This allows MITM attacks."
+    severity: ERROR
+    languages: [python, javascript, typescript, go]
+    metadata:
+      cwe: "CWE-295: Improper Certificate Validation"
+      owasp: "A02:2021 - Cryptographic Failures"
+
+  # OWASP A06:2021 - Vulnerable and Outdated Components
+  # (Handled by SCA tools - Dependency-Check, safety, etc.)
+
+  # OWASP A07:2021 - Identification and Authentication Failures
+  - id: weak-random-generator
+    patterns:
+      - pattern-either:
+          - pattern: random.random()
+          - pattern: Math.random()
+          - pattern: rand.Int(...)
+    message: "Use cryptographically secure random generator for security-sensitive operations."
+    severity: WARNING
+    languages: [python, javascript, typescript, go]
+    metadata:
+      cwe: "CWE-338: Use of Cryptographically Weak PRNG"
+      owasp: "A07:2021 - Identification and Authentication Failures"
+
+  # OWASP A08:2021 - Software and Data Integrity Failures
+  - id: insecure-deserialization
+    patterns:
+      - pattern-either:
+          - pattern: pickle.loads($VAR)
+          - pattern: yaml.load($VAR)
+          - pattern: unserialize($VAR)
+          - pattern: ObjectInputStream.readObject()
+    message: "Insecure deserialization detected. Validate input sources."
+    severity: ERROR
+    languages: [python, java, php]
+    metadata:
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+
+  # OWASP A09:2021 - Security Logging and Monitoring Failures
+  - id: sensitive-data-in-logs
+    patterns:
+      - pattern-either:
+          - pattern: logger.info(... + password + ...)
+          - pattern: console.log(... + token + ...)
+          - pattern: log.Println(... + secret + ...)
+          - pattern: print(... + api_key + ...)
+    message: "Potential sensitive data in logs. Sanitize before logging."
+    severity: WARNING
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-532: Information Exposure Through Log Files"
+      owasp: "A09:2021 - Security Logging and Monitoring Failures"
+
+  # OWASP A10:2021 - Server-Side Request Forgery (SSRF)
+  - id: ssrf-risk
+    patterns:
+      - pattern-either:
+          - pattern: requests.get($VAR, ...)
+          - pattern: urllib.request.urlopen($VAR)
+          - pattern: fetch($VAR)
+          - pattern: http.Get($VAR)
+          - pattern: file_get_contents($VAR)
+    message: "Potential SSRF. Validate and sanitize URLs from user input."
+    severity: WARNING
+    languages: [python, javascript, typescript, go, php]
+    metadata:
+      cwe: "CWE-918: Server-Side Request Forgery (SSRF)"
+      owasp: "A10:2021 - Server-Side Request Forgery"
+
+  # Additional CWE Top 25
+  - id: path-traversal
+    patterns:
+      - pattern-either:
+          - pattern: open($VAR, ...)
+          - pattern: os.path.join($BASE, $VAR)
+          - pattern: path.join($BASE, $VAR)
+          - pattern: new File($VAR)
+          - pattern: ioutil.ReadFile($VAR)
+    message: "Potential path traversal. Validate file paths."
+    severity: WARNING
+    languages: [python, javascript, typescript, java, go, php]
+    metadata:
+      cwe: "CWE-22: Path Traversal"
+
+  - id: xxe-vulnerability
+    patterns:
+      - pattern-either:
+          - pattern: XMLParser(...)
+          - pattern: etree.parse($VAR)
+          - pattern: parseXml($VAR)
+          - pattern: DocumentBuilderFactory.newInstance()
+    message: "XML parser may be vulnerable to XXE. Disable external entities."
+    severity: ERROR
+    languages: [python, javascript, typescript, java, php]
+    metadata:
+      cwe: "CWE-611: Improper Restriction of XML External Entity Reference"
+      owasp: "A03:2021 - Injection"

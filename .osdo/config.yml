@@ -1,0 +1,190 @@
+# OSDO Framework Configuration
+# This file contains default configurations for OSDO security and compliance checks
+
+# Test Coverage Configuration
+test:
+  coverage:
+    minimum: 80
+    format: 'lcov'
+    exclude:
+      - 'test/**'
+      - 'tests/**'
+      - '**/*.test.js'
+      - '**/*.spec.js'
+      - 'node_modules/**'
+
+# Security Scan Configuration
+security:
+  # Software Composition Analysis (SCA)
+  sca:
+    enabled: true
+    exclude_dev: false
+    severity_threshold: 'moderate'
+    tools:
+      node:
+        enabled: true
+        tool: 'audit-ci'
+      python:
+        enabled: true
+        tool: 'safety'
+      java:
+        enabled: true
+        tool: 'dependency-check'
+      go:
+        enabled: true
+        tool: 'govulncheck'
+      php:
+        enabled: true
+        tool: 'local-php-security-checker'
+  
+  # Static Application Security Testing (SAST)
+  sast:
+    enabled: true
+    languages:
+      - javascript
+      - typescript
+      - python
+      - java
+      - go
+      - php
+    tools:
+      semgrep:
+        enabled: true
+        config: 'auto'
+      bandit:
+        enabled: true
+        language: 'python'
+      gosec:
+        enabled: true
+        language: 'go'
+      spotbugs:
+        enabled: true
+        language: 'java'
+      phpstan:
+        enabled: true
+        language: 'php'
+  
+  # Secrets Detection
+  secrets:
+    enabled: true
+    tools:
+      - 'gitleaks'
+      - 'trufflehog'
+    exclude_paths:
+      - '.git/**'
+      - 'node_modules/**'
+      - '**/*.log'
+
+# Quality Gates
+quality_gates:
+  security_score:
+    minimum: 70
+    fail_on_high_severity: true
+  
+  test_coverage:
+    minimum: 80
+    fail_below_threshold: false
+  
+  vulnerabilities:
+    critical_threshold: 0
+    high_threshold: 5
+    secrets_threshold: 0
+  
+  compliance:
+    required_checks:
+      - 'dependency_scan'
+      - 'secrets_scan'
+      - 'static_analysis'
+      - 'test_coverage'
+      - 'build_security'
+      - 'sbom_generation'
+
+# Reporting Configuration
+reporting:
+  formats:
+    - 'markdown'
+    - 'sarif'
+  
+  upload_to_security_tab: true
+  comment_on_pr: true
+  
+  artifacts:
+    retention_days:
+      test_results: 30
+      security_results: 90
+      compliance_reports: 365
+
+# Tool Configurations
+tools:
+  semgrep:
+    config: 'auto'
+    rules:
+      - 'p/security-audit'
+      - 'p/javascript'
+      - 'p/typescript'
+      - 'p/java'
+      - 'p/go'
+      - 'p/php'
+  
+  bandit:
+    confidence_level: 'medium'
+    severity_level: 'low'
+  
+  gosec:
+    severity: 'low'
+    confidence: 'low'
+    exclude_dirs:
+      - 'vendor'
+      - 'test'
+  
+  spotbugs:
+    effort: 'max'
+    threshold: 'low'
+    include_filter: '.osdo/spotbugs-include.xml'
+  
+  phpstan:
+    level: 'max'
+    configuration: '.osdo/phpstan.neon'
+  
+  dependency-check:
+    fail_on_cvss: 7
+    suppression_file: '.osdo/dependency-check-suppressions.xml'
+  
+  govulncheck:
+    mode: 'source'
+  
+  eslint:
+    plugins:
+      - 'security'
+      - 'react-hooks'
+    rules:
+      security: 'error'
+  
+  gitleaks:
+    config: '.osdo/gitleaks.toml'
+  
+  trufflehog:
+    verified: true
+    include_detectors:
+      - 'all'
+
+# Build Security Configuration
+build_security:
+  sbom:
+    formats:
+      - 'json'
+      - 'xml'
+    tools:
+      - 'cyclonedx'
+  
+  verification:
+    enabled: true
+    check_integrity: true
+    validate_outputs: true
+  
+  build_commands:
+    node: 'npm run build'
+    python: 'python -m build'
+    java: 'mvn clean install'
+    go: 'go build ./...'
+    php: 'composer install --no-dev --optimize-autoloader'

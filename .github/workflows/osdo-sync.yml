@@ -1,0 +1,190 @@
+name: "OSDO Sync - Cross-Repository Versioning"
+# Maintains version parity across osdo-actions, osdo-workflows, and osdo-framework
+
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "New version (e.g., 1.5.0)"
+                required: true
+            bump-type:
+                description: "Release type"
+                type: choice
+                options:
+                    - patch
+                    - minor
+                    - major
+                default: patch
+            dry-run:
+                description: "Dry run (no actual commits)"
+                type: boolean
+                default: true
+
+    push:
+        tags:
+            - "v*"
+
+env:
+    GH_TOKEN: ${{ secrets.OSDO_SYNC_TOKEN }}
+
+jobs:
+    validate-version:
+        runs-on: ubuntu-latest
+        outputs:
+            version: ${{ steps.version.outputs.version }}
+            valid: ${{ steps.validate.outputs.valid }}
+        steps:
+            - name: Determine Version
+              id: version
+              run: |
+                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                    VERSION="${{ github.event.inputs.version }}"
+                  else
+                    VERSION="${GITHUB_REF#refs/tags/v}"
+                  fi
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "📦 Version: $VERSION"
+
+            - name: Validate Semver
+              id: validate
+              run: |
+                  VERSION="${{ steps.version.outputs.version }}"
+                  if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+                    echo "valid=true" >> $GITHUB_OUTPUT
+                    echo "✅ Valid semver: $VERSION"
+                  else
+                    echo "valid=false" >> $GITHUB_OUTPUT
+                    echo "❌ Invalid semver: $VERSION"
+                    exit 1
+                  fi
+
+    sync-repositories:
+        needs: validate-version
+        if: needs.validate-version.outputs.valid == 'true'
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                repo:
+                    - opensecdevops/osdo-actions
+                    - opensecdevops/osdo-workflows
+                    - opensecdevops/osdo-starter
+        steps:
+            - name: Checkout Target Repo
+              uses: actions/checkout@v4
+              with:
+                  repository: ${{ matrix.repo }}
+                  token: ${{ env.GH_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Update Version Files
+              id: update
+              run: |
+                  VERSION="${{ needs.validate-version.outputs.version }}"
+                  DRY_RUN="${{ github.event.inputs.dry-run || 'false' }}"
+
+                  echo "📦 Syncing ${{ matrix.repo }} to v$VERSION"
+
+                  # Update package.json if exists
+                  if [ -f "package.json" ]; then
+                    jq ".version = \"$VERSION\"" package.json > tmp.json && mv tmp.json package.json
+                    echo "Updated package.json"
+                  fi
+
+                  # Update VERSION file
+                  echo "$VERSION" > VERSION
+
+                  # Update action.yml versions (for osdo-actions)
+                  if [[ "${{ matrix.repo }}" == *"osdo-actions"* ]]; then
+                    find actions -name "action.yml" -exec grep -l "branding" {} \; | while read f; do
+                      # Add version metadata to action files
+                      if ! grep -q "^version:" "$f"; then
+                        sed -i "1a\\version: $VERSION" "$f" || true
+                      else
+                        sed -i "s/^version:.*/version: $VERSION/" "$f" || true
+                      fi
+                    done
+                    echo "Updated action.yml files"
+                  fi
+
+                  if [ "$DRY_RUN" == "true" ]; then
+                    echo "🔍 DRY RUN - Changes not committed"
+                    git diff
+                  else
+                    echo "changes=true" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Commit & Tag
+              if: github.event.inputs.dry-run != 'true'
+              run: |
+                  VERSION="${{ needs.validate-version.outputs.version }}"
+
+                  git config user.name "OSDO Sync Bot"
+                  git config user.email "osdo-sync@opensecdevops.org"
+
+                  git add -A
+                  git commit -m "chore: sync version to v$VERSION" || echo "No changes"
+                  git tag -a "v$VERSION" -m "Release v$VERSION" || echo "Tag exists"
+                  git push origin main --tags || echo "Push failed"
+
+    create-release-notes:
+        needs: [validate-version, sync-repositories]
+        if: github.event.inputs.dry-run != 'true'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Generate Release Notes
+              run: |
+                  VERSION="${{ needs.validate-version.outputs.version }}"
+
+                  cat << EOF > release-notes.md
+                  # OSDO v$VERSION
+
+                  ## 🔄 Repositorios Sincronizados
+
+                  - ✅ osdo-actions v$VERSION
+                  - ✅ osdo-workflows v$VERSION
+                  - ✅ osdo-starter v$VERSION
+
+                  ## 📦 Instalación
+
+                  \`\`\`yaml
+                  # GitHub Action (el tag incluye el nombre del action)
+                  uses: opensecdevops/osdo-actions/actions/osdo-sast@osdo-sast/v$VERSION
+
+                  # Reusable Workflow
+                  uses: opensecdevops/osdo-workflows/.github/workflows/osdo-framework.yml@v$VERSION
+
+                  # Template (fork desde GitHub)
+                  gh repo create mi-proyecto --template opensecdevops/osdo-starter
+                  \`\`\`
+
+                  ## 📋 OpenSSF Compliance
+
+                  [![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/XXXX/badge)](https://bestpractices.coreinfrastructure.org/projects/XXXX)
+                  EOF
+
+                  cat release-notes.md
+
+            - name: Create GitHub Release
+              env:
+                  VERSION: ${{ needs.validate-version.outputs.version }}
+              run: |
+                  gh release create "v$VERSION" \
+                    --title "OSDO v$VERSION" \
+                    --notes-file release-notes.md \
+                    --repo opensecdevops/osdo-starter || echo "Release may exist"
+
+    notify-slack:
+        needs: [validate-version, sync-repositories, create-release-notes]
+        if: always() && github.event.inputs.dry-run != 'true'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Send Notification
+              run: |
+                  VERSION="${{ needs.validate-version.outputs.version }}"
+                  STATUS="${{ needs.sync-repositories.result }}"
+
+                  if [ "$STATUS" == "success" ]; then
+                    echo "✅ OSDO v$VERSION released successfully"
+                  else
+                    echo "❌ OSDO v$VERSION release failed"
+                  fi

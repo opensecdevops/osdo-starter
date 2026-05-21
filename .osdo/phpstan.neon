@@ -1,0 +1,89 @@
+# PHPStan Configuration for OSDO Framework
+#
+# Security-focused static analysis for PHP projects
+# Aligned with OWASP and secure coding best practices
+
+parameters:
+  # Analysis Level (0-9, where 9 is the strictest)
+  level: 8
+  
+  # Paths to analyze
+  paths:
+    - src
+    - app
+  
+  # Paths to exclude from analysis
+  excludePaths:
+    - */tests/*
+    - */vendor/*
+    - */cache/*
+    - */var/*
+    - */node_modules/*
+  
+  # Check for missing type hints
+  checkMissingIterableValueType: true
+  checkGenericClassInNonGenericObjectType: true
+  
+  # Security-related checks
+  checkAlwaysTrueCheckTypeFunctionCall: true
+  checkAlwaysTrueInstanceof: true
+  checkAlwaysTrueStrictComparison: true
+  checkExplicitMixedMissingReturn: true
+  checkFunctionNameCase: true
+  checkInternalClassCaseSensitivity: true
+  
+  # Require proper type declarations
+  checkMissingCallableSignature: true
+  checkTooWideReturnTypesInProtectedAndPublicMethods: true
+  checkUninitializedProperties: true
+  
+  # Strict rules
+  checkBenevolentUnionTypes: true
+  checkImplicitMixed: true
+  
+  # Report unused variables (potential security issue)
+  checkUnusedVariables: true
+  
+  # Universal object crates (disable for security)
+  universalObjectCratesClasses:
+    - stdClass
+  
+  # Ignore errors in vendor directory
+  ignoreErrors:
+    # Add specific patterns to ignore if needed
+    # Example:
+    # - '#Call to an undefined method#'
+  
+  # Bootstrap files (if needed)
+  # bootstrapFiles:
+  #   - phpstan-bootstrap.php
+  
+  # Report always true/false conditions (potential logic errors)
+  reportAlwaysTrueInLastCondition: true
+  
+  # Check for potentially dangerous patterns
+  reportMaybesInMethodSignatures: true
+  reportStaticMethodSignatures: true
+  
+  # Treat PHP deprecations as errors
+  reportDeprecations: true
+  
+  # Enable parallel processing for faster analysis
+  parallel:
+    jobSize: 20
+    maximumNumberOfProcesses: 4
+    minimumNumberOfJobsPerProcess: 2
+
+# Include security-focused rules
+includes:
+  # Uncomment if using PHPStan extensions
+  # - vendor/phpstan/phpstan-strict-rules/rules.neon
+  # - vendor/phpstan/phpstan-deprecation-rules/rules.neon
+
+# Custom rules for security
+rules:
+  # Add custom security rules here if needed
+
+# Services configuration
+services:
+  # Custom error formatters or collectors can be added here
